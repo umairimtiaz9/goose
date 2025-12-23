@@ -4,7 +4,7 @@ goose automatically uses Chat Recall when you reference past work or ask questio
 
 ## Configuration
 
-<PlatformExtensionNote defaultEnabled={false} />
+<PlatformExtensionNote/>
 
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
