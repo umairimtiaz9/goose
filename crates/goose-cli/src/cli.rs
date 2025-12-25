@@ -75,6 +75,250 @@ jsonl' -> '20250325_200615')."
     pub path: Option<PathBuf>,
 }
 
+/// Session behavior options shared between Session and Run commands
+#[derive(Args, Debug, Clone, Default)]
+pub struct SessionOptions {
+    #[arg(
+        long,
+        help = "Enable debug output mode with full content and no truncation",
+        long_help = "When enabled, shows complete tool responses without truncation and full paths."
+    )]
+    pub debug: bool,
+
+    #[arg(
+        long = "max-tool-repetitions",
+        value_name = "NUMBER",
+        help = "Maximum number of consecutive identical tool calls allowed",
+        long_help = "Set a limit on how many times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops."
+    )]
+    pub max_tool_repetitions: Option<u32>,
+
+    #[arg(
+        long = "max-turns",
+        value_name = "NUMBER",
+        help = "Maximum number of turns allowed without user input (default: 1000)",
+        long_help = "Set a limit on how many turns (iterations) the agent can take without asking for user input to continue."
+    )]
+    pub max_turns: Option<u32>,
+}
+
+/// Extension configuration options shared between Session and Run commands
+#[derive(Args, Debug, Clone, Default)]
+pub struct ExtensionOptions {
+    #[arg(
+        long = "with-extension",
+        value_name = "COMMAND",
+        help = "Add stdio extensions (can be specified multiple times)",
+        long_help = "Add stdio extensions from full commands with environment variables. Can be specified multiple times. Format: 'ENV1=val1 ENV2=val2 command args...'",
+        action = clap::ArgAction::Append
+    )]
+    pub extensions: Vec<String>,
+
+    #[arg(
+        long = "with-remote-extension",
+        value_name = "URL",
+        help = "Add remote extensions (can be specified multiple times)",
+        long_help = "Add remote extensions from a URL. Can be specified multiple times. Format: 'url...'",
+        action = clap::ArgAction::Append
+    )]
+    pub remote_extensions: Vec<String>,
+
+    #[arg(
+        long = "with-streamable-http-extension",
+        value_name = "URL",
+        help = "Add streamable HTTP extensions (can be specified multiple times)",
+        long_help = "Add streamable HTTP extensions from a URL. Can be specified multiple times. Format: 'url...'",
+        action = clap::ArgAction::Append
+    )]
+    pub streamable_http_extensions: Vec<String>,
+
+    #[arg(
+        long = "with-builtin",
+        value_name = "NAME",
+        help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
+        long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+        value_delimiter = ','
+    )]
+    pub builtins: Vec<String>,
+}
+
+/// Input source and recipe options for the run command
+#[derive(Args, Debug, Clone, Default)]
+pub struct InputOptions {
+    /// Path to instruction file containing commands
+    #[arg(
+        short,
+        long,
+        value_name = "FILE",
+        help = "Path to instruction file containing commands. Use - for stdin.",
+        conflicts_with = "input_text",
+        conflicts_with = "recipe"
+    )]
+    pub instructions: Option<String>,
+
+    /// Input text containing commands
+    #[arg(
+        short = 't',
+        long = "text",
+        value_name = "TEXT",
+        help = "Input text to provide to goose directly",
+        long_help = "Input text containing commands for goose. Use this in lieu of the instructions argument.",
+        conflicts_with = "instructions",
+        conflicts_with = "recipe"
+    )]
+    pub input_text: Option<String>,
+
+    /// Recipe name or full path to the recipe file
+    #[arg(
+        short = None,
+        long = "recipe",
+        value_name = "RECIPE_NAME or FULL_PATH_TO_RECIPE_FILE",
+        help = "Recipe name to get recipe file or the full path of the recipe file (use --explain to see recipe details)",
+        long_help = "Recipe name to get recipe file or the full path of the recipe file that defines a custom agent configuration. Use --explain to see the recipe's title, description, and parameters.",
+        conflicts_with = "instructions",
+        conflicts_with = "input_text"
+    )]
+    pub recipe: Option<String>,
+
+    /// Additional system prompt to customize agent behavior
+    #[arg(
+        long = "system",
+        value_name = "TEXT",
+        help = "Additional system prompt to customize agent behavior",
+        long_help = "Provide additional system instructions to customize the agent's behavior",
+        conflicts_with = "recipe"
+    )]
+    pub system: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "KEY=VALUE",
+        help = "Dynamic parameters (e.g., --params username=alice --params channel_name=goose-channel)",
+        long_help = "Key-value parameters to pass to the recipe file. Can be specified multiple times.",
+        action = clap::ArgAction::Append,
+        value_parser = parse_key_val,
+    )]
+    pub params: Vec<(String, String)>,
+
+    /// Additional sub-recipe file paths
+    #[arg(
+        long = "sub-recipe",
+        value_name = "RECIPE",
+        help = "Sub-recipe name or file path (can be specified multiple times)",
+        long_help = "Specify sub-recipes to include alongside the main recipe. Can be:\n  - Recipe names from GitHub (if GOOSE_RECIPE_GITHUB_REPO is configured)\n  - Local file paths to YAML files\nCan be specified multiple times to include multiple sub-recipes.",
+        action = clap::ArgAction::Append
+    )]
+    pub additional_sub_recipes: Vec<String>,
+
+    /// Show the recipe title, description, and parameters
+    #[arg(
+        long = "explain",
+        help = "Show the recipe title, description, and parameters"
+    )]
+    pub explain: bool,
+
+    /// Print the rendered recipe instead of running it
+    #[arg(
+        long = "render-recipe",
+        help = "Print the rendered recipe instead of running it."
+    )]
+    pub render_recipe: bool,
+}
+
+/// Output configuration options for the run command
+#[derive(Args, Debug, Clone)]
+pub struct OutputOptions {
+    /// Quiet mode - suppress non-response output
+    #[arg(
+        short = 'q',
+        long = "quiet",
+        help = "Quiet mode. Suppress non-response output, printing only the model response to stdout"
+    )]
+    pub quiet: bool,
+
+    /// Output format (text, json, stream-json)
+    #[arg(
+        long = "output-format",
+        value_name = "FORMAT",
+        help = "Output format (text, json, stream-json)",
+        default_value = "text",
+        value_parser = clap::builder::PossibleValuesParser::new(["text", "json", "stream-json"])
+    )]
+    pub output_format: String,
+}
+
+impl Default for OutputOptions {
+    fn default() -> Self {
+        Self {
+            quiet: false,
+            output_format: "text".to_string(),
+        }
+    }
+}
+
+/// Model/provider override options for the run command
+#[derive(Args, Debug, Clone, Default)]
+pub struct ModelOptions {
+    /// Provider to use for this run (overrides environment variable)
+    #[arg(
+        long = "provider",
+        value_name = "PROVIDER",
+        help = "Specify the LLM provider to use (e.g., 'openai', 'anthropic')",
+        long_help = "Override the GOOSE_PROVIDER environment variable for this run. Available providers include openai, anthropic, ollama, databricks, gemini-cli, claude-code, and others."
+    )]
+    pub provider: Option<String>,
+
+    /// Model to use for this run (overrides environment variable)
+    #[arg(
+        long = "model",
+        value_name = "MODEL",
+        help = "Specify the model to use (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')",
+        long_help = "Override the GOOSE_MODEL environment variable for this run. The model must be supported by the specified provider."
+    )]
+    pub model: Option<String>,
+}
+
+/// Run execution behavior options
+#[derive(Args, Debug, Clone, Default)]
+pub struct RunBehavior {
+    /// Continue in interactive mode after processing input
+    #[arg(
+        short = 's',
+        long = "interactive",
+        help = "Continue in interactive mode after processing initial input"
+    )]
+    pub interactive: bool,
+
+    /// Run without storing a session file
+    #[arg(
+        long = "no-session",
+        help = "Run without storing a session file",
+        long_help = "Execute commands without creating or using a session file. Useful for automated runs.",
+        conflicts_with_all = ["resume", "name", "path"]
+    )]
+    pub no_session: bool,
+
+    /// Resume a previous run
+    #[arg(
+        short,
+        long,
+        action = clap::ArgAction::SetTrue,
+        help = "Resume from a previous run",
+        long_help = "Continue from a previous run, maintaining the execution state and context."
+    )]
+    pub resume: bool,
+
+    /// Scheduled job ID (used internally for scheduled executions)
+    #[arg(
+        long = "scheduled-job-id",
+        value_name = "ID",
+        help = "ID of the scheduled job that triggered this execution (internal use)",
+        long_help = "Internal parameter used when this run command is executed by a scheduled job. This associates the session with the schedule for tracking purposes.",
+        hide = true
+    )]
+    pub scheduled_job_id: Option<String>,
+}
+
 async fn get_or_create_session_id(
     identifier: Option<Identifier>,
     resume: bool,
@@ -460,7 +704,7 @@ enum Command {
     Session {
         #[command(subcommand)]
         command: Option<SessionCommand>,
-        /// Identifier for the chat session
+
         #[command(flatten)]
         identifier: Option<Identifier>,
 
@@ -481,71 +725,11 @@ enum Command {
         )]
         history: bool,
 
-        /// Enable debug output mode
-        #[arg(
-            long,
-            help = "Enable debug output mode with full content and no truncation",
-            long_help = "When enabled, shows complete tool responses without truncation and full paths."
-        )]
-        debug: bool,
+        #[command(flatten)]
+        session_opts: SessionOptions,
 
-        /// Maximum number of consecutive identical tool calls allowed
-        #[arg(
-            long = "max-tool-repetitions",
-            value_name = "NUMBER",
-            help = "Maximum number of consecutive identical tool calls allowed",
-            long_help = "Set a limit on how many times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops."
-        )]
-        max_tool_repetitions: Option<u32>,
-
-        /// Maximum number of turns (iterations) allowed in a single response
-        #[arg(
-            long = "max-turns",
-            value_name = "NUMBER",
-            help = "Maximum number of turns allowed without user input (default: 1000)",
-            long_help = "Set a limit on how many turns (iterations) the agent can take without asking for user input to continue."
-        )]
-        max_turns: Option<u32>,
-
-        /// Add stdio extensions with environment variables and commands
-        #[arg(
-            long = "with-extension",
-            value_name = "COMMAND",
-            help = "Add stdio extensions (can be specified multiple times)",
-            long_help = "Add stdio extensions from full commands with environment variables. Can be specified multiple times. Format: 'ENV1=val1 ENV2=val2 command args...'",
-            action = clap::ArgAction::Append
-        )]
-        extensions: Vec<String>,
-
-        /// Add remote extensions with a URL
-        #[arg(
-            long = "with-remote-extension",
-            value_name = "URL",
-            help = "Add remote extensions (can be specified multiple times)",
-            long_help = "Add remote extensions from a URL. Can be specified multiple times. Format: 'url...'",
-            action = clap::ArgAction::Append
-        )]
-        remote_extensions: Vec<String>,
-
-        /// Add streamable HTTP extensions with a URL
-        #[arg(
-            long = "with-streamable-http-extension",
-            value_name = "URL",
-            help = "Add streamable HTTP extensions (can be specified multiple times)",
-            long_help = "Add streamable HTTP extensions from a URL. Can be specified multiple times. Format: 'url...'",
-            action = clap::ArgAction::Append
-        )]
-        streamable_http_extensions: Vec<String>,
-
-        /// Add builtin extensions by name
-        #[arg(
-            long = "with-builtin",
-            value_name = "NAME",
-            help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
-            value_delimiter = ','
-        )]
-        builtins: Vec<String>,
+        #[command(flatten)]
+        extension_opts: ExtensionOptions,
     },
 
     /// Open the last project directory
@@ -559,227 +743,26 @@ enum Command {
     /// Execute commands from an instruction file
     #[command(about = "Execute commands from an instruction file or stdin")]
     Run {
-        /// Path to instruction file containing commands
-        #[arg(
-            short,
-            long,
-            value_name = "FILE",
-            help = "Path to instruction file containing commands. Use - for stdin.",
-            conflicts_with = "input_text",
-            conflicts_with = "recipe"
-        )]
-        instructions: Option<String>,
+        #[command(flatten)]
+        input_opts: InputOptions,
 
-        /// Input text containing commands
-        #[arg(
-            short = 't',
-            long = "text",
-            value_name = "TEXT",
-            help = "Input text to provide to goose directly",
-            long_help = "Input text containing commands for goose. Use this in lieu of the instructions argument.",
-            conflicts_with = "instructions",
-            conflicts_with = "recipe"
-        )]
-        input_text: Option<String>,
-
-        /// Additional system prompt to customize agent behavior
-        #[arg(
-            long = "system",
-            value_name = "TEXT",
-            help = "Additional system prompt to customize agent behavior",
-            long_help = "Provide additional system instructions to customize the agent's behavior",
-            conflicts_with = "recipe"
-        )]
-        system: Option<String>,
-
-        /// Recipe name or full path to the recipe file
-        #[arg(
-            short = None,
-            long = "recipe",
-            value_name = "RECIPE_NAME or FULL_PATH_TO_RECIPE_FILE",
-            help = "Recipe name to get recipe file or the full path of the recipe file (use --explain to see recipe details)",
-            long_help = "Recipe name to get recipe file or the full path of the recipe file that defines a custom agent configuration. Use --explain to see the recipe's title, description, and parameters.",
-            conflicts_with = "instructions",
-            conflicts_with = "input_text"
-        )]
-        recipe: Option<String>,
-
-        #[arg(
-            long,
-            value_name = "KEY=VALUE",
-            help = "Dynamic parameters (e.g., --params username=alice --params channel_name=goose-channel)",
-            long_help = "Key-value parameters to pass to the recipe file. Can be specified multiple times.",
-            action = clap::ArgAction::Append,
-            value_parser = parse_key_val,
-        )]
-        params: Vec<(String, String)>,
-
-        /// Continue in interactive mode after processing input
-        #[arg(
-            short = 's',
-            long = "interactive",
-            help = "Continue in interactive mode after processing initial input"
-        )]
-        interactive: bool,
-
-        /// Run without storing a session file
-        #[arg(
-            long = "no-session",
-            help = "Run without storing a session file",
-            long_help = "Execute commands without creating or using a session file. Useful for automated runs.",
-            conflicts_with_all = ["resume", "name", "path"]
-        )]
-        no_session: bool,
-
-        /// Show the recipe title, description, and parameters
-        #[arg(
-            long = "explain",
-            help = "Show the recipe title, description, and parameters"
-        )]
-        explain: bool,
-
-        /// Print the rendered recipe instead of running it
-        #[arg(
-            long = "render-recipe",
-            help = "Print the rendered recipe instead of running it."
-        )]
-        render_recipe: bool,
-
-        /// Maximum number of consecutive identical tool calls allowed
-        #[arg(
-            long = "max-tool-repetitions",
-            value_name = "NUMBER",
-            help = "Maximum number of consecutive identical tool calls allowed",
-            long_help = "Set a limit on how many times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops."
-        )]
-        max_tool_repetitions: Option<u32>,
-
-        /// Maximum number of turns (iterations) allowed in a single response
-        #[arg(
-            long = "max-turns",
-            value_name = "NUMBER",
-            help = "Maximum number of turns allowed without user input (default: 1000)",
-            long_help = "Set a limit on how many turns (iterations) the agent can take without asking for user input to continue."
-        )]
-        max_turns: Option<u32>,
-
-        /// Identifier for this run session
         #[command(flatten)]
         identifier: Option<Identifier>,
 
-        /// Resume a previous run
-        #[arg(
-            short,
-            long,
-            action = clap::ArgAction::SetTrue,
-            help = "Resume from a previous run",
-            long_help = "Continue from a previous run, maintaining the execution state and context."
-        )]
-        resume: bool,
+        #[command(flatten)]
+        run_behavior: RunBehavior,
 
-        /// Enable debug output mode
-        #[arg(
-            long,
-            help = "Enable debug output mode with full content and no truncation",
-            long_help = "When enabled, shows complete tool responses without truncation and full paths."
-        )]
-        debug: bool,
+        #[command(flatten)]
+        session_opts: SessionOptions,
 
-        /// Add stdio extensions with environment variables and commands
-        #[arg(
-            long = "with-extension",
-            value_name = "COMMAND",
-            help = "Add stdio extensions (can be specified multiple times)",
-            long_help = "Add stdio extensions from full commands with environment variables. Can be specified multiple times. Format: 'ENV1=val1 ENV2=val2 command args...'",
-            action = clap::ArgAction::Append
-        )]
-        extensions: Vec<String>,
+        #[command(flatten)]
+        extension_opts: ExtensionOptions,
 
-        /// Add remote extensions
-        #[arg(
-            long = "with-remote-extension",
-            value_name = "URL",
-            help = "Add remote extensions (can be specified multiple times)",
-            long_help = "Add remote extensions. Can be specified multiple times. Format: 'url...'",
-            action = clap::ArgAction::Append
-        )]
-        remote_extensions: Vec<String>,
+        #[command(flatten)]
+        output_opts: OutputOptions,
 
-        /// Add streamable HTTP extensions
-        #[arg(
-            long = "with-streamable-http-extension",
-            value_name = "URL",
-            help = "Add streamable HTTP extensions (can be specified multiple times)",
-            long_help = "Add streamable HTTP extensions. Can be specified multiple times. Format: 'url...'",
-            action = clap::ArgAction::Append
-        )]
-        streamable_http_extensions: Vec<String>,
-
-        /// Add builtin extensions by name
-        #[arg(
-            long = "with-builtin",
-            value_name = "NAME",
-            help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
-            value_delimiter = ','
-        )]
-        builtins: Vec<String>,
-
-        /// Quiet mode - suppress non-response output
-        #[arg(
-            short = 'q',
-            long = "quiet",
-            help = "Quiet mode. Suppress non-response output, printing only the model response to stdout"
-        )]
-        quiet: bool,
-
-        /// Scheduled job ID (used internally for scheduled executions)
-        #[arg(
-            long = "scheduled-job-id",
-            value_name = "ID",
-            help = "ID of the scheduled job that triggered this execution (internal use)",
-            long_help = "Internal parameter used when this run command is executed by a scheduled job. This associates the session with the schedule for tracking purposes.",
-            hide = true
-        )]
-        scheduled_job_id: Option<String>,
-
-        /// Additional sub-recipe file paths
-        #[arg(
-            long = "sub-recipe",
-            value_name = "RECIPE",
-            help = "Sub-recipe name or file path (can be specified multiple times)",
-            long_help = "Specify sub-recipes to include alongside the main recipe. Can be:\n  - Recipe names from GitHub (if GOOSE_RECIPE_GITHUB_REPO is configured)\n  - Local file paths to YAML files\nCan be specified multiple times to include multiple sub-recipes.",
-            action = clap::ArgAction::Append
-        )]
-        additional_sub_recipes: Vec<String>,
-
-        /// Output format (text, json, stream-json)
-        #[arg(
-            long = "output-format",
-            value_name = "FORMAT",
-            help = "Output format (text, json, stream-json)",
-            default_value = "text",
-            value_parser = clap::builder::PossibleValuesParser::new(["text", "json", "stream-json"])
-        )]
-        output_format: String,
-
-        /// Provider to use for this run (overrides environment variable)
-        #[arg(
-            long = "provider",
-            value_name = "PROVIDER",
-            help = "Specify the LLM provider to use (e.g., 'openai', 'anthropic')",
-            long_help = "Override the GOOSE_PROVIDER environment variable for this run. Available providers include openai, anthropic, ollama, databricks, gemini-cli, claude-code, and others."
-        )]
-        provider: Option<String>,
-
-        /// Model to use for this run (overrides environment variable)
-        #[arg(
-            long = "model",
-            value_name = "MODEL",
-            help = "Specify the model to use (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')",
-            long_help = "Override the GOOSE_MODEL environment variable for this run. The model must be supported by the specified provider."
-        )]
-        model: Option<String>,
+        #[command(flatten)]
+        model_opts: ModelOptions,
     },
 
     /// Recipe utilities for validation and deeplinking
@@ -1038,22 +1021,15 @@ async fn handle_session_subcommand(command: SessionCommand) -> Result<()> {
     Ok(())
 }
 
-struct InteractiveSessionArgs {
+async fn handle_interactive_session(
     identifier: Option<Identifier>,
     resume: bool,
     history: bool,
-    debug: bool,
-    max_tool_repetitions: Option<u32>,
-    max_turns: Option<u32>,
-    extensions: Vec<String>,
-    remote_extensions: Vec<String>,
-    streamable_http_extensions: Vec<String>,
-    builtins: Vec<String>,
-}
-
-async fn handle_interactive_session(args: InteractiveSessionArgs) -> Result<()> {
+    session_opts: SessionOptions,
+    extension_opts: ExtensionOptions,
+) -> Result<()> {
     let session_start = std::time::Instant::now();
-    let session_type = if args.resume { "resumed" } else { "new" };
+    let session_type = if resume { "resumed" } else { "new" };
 
     tracing::info!(
         counter.goose.session_starts = 1,
@@ -1065,32 +1041,32 @@ async fn handle_interactive_session(args: InteractiveSessionArgs) -> Result<()> 
     if let Some(Identifier {
         session_id: Some(_),
         ..
-    }) = &args.identifier
+    }) = &identifier
     {
-        if !args.resume {
+        if !resume {
             eprintln!("Error: --session-id can only be used with --resume flag");
             std::process::exit(1);
         }
     }
 
-    let session_id = get_or_create_session_id(args.identifier, args.resume, false).await?;
+    let session_id = get_or_create_session_id(identifier, resume, false).await?;
 
     let mut session: crate::CliSession = build_session(SessionBuilderConfig {
         session_id,
-        resume: args.resume,
+        resume,
         no_session: false,
-        extensions: args.extensions,
-        remote_extensions: args.remote_extensions,
-        streamable_http_extensions: args.streamable_http_extensions,
-        builtins: args.builtins,
+        extensions: extension_opts.extensions,
+        remote_extensions: extension_opts.remote_extensions,
+        streamable_http_extensions: extension_opts.streamable_http_extensions,
+        builtins: extension_opts.builtins,
         extensions_override: None,
         additional_system_prompt: None,
         settings: None,
         provider: None,
         model: None,
-        debug: args.debug,
-        max_tool_repetitions: args.max_tool_repetitions,
-        max_turns: args.max_turns,
+        debug: session_opts.debug,
+        max_tool_repetitions: session_opts.max_tool_repetitions,
+        max_turns: session_opts.max_turns,
         scheduled_job_id: None,
         interactive: true,
         quiet: false,
@@ -1101,7 +1077,7 @@ async fn handle_interactive_session(args: InteractiveSessionArgs) -> Result<()> 
     })
     .await;
 
-    if args.resume && args.history {
+    if resume && history {
         session.render_message_history();
     }
 
@@ -1150,63 +1126,31 @@ async fn log_session_completion(
     }
 }
 
-struct RunCommandArgs {
-    instructions: Option<String>,
-    input_text: Option<String>,
-    recipe: Option<String>,
-    system: Option<String>,
-    interactive: bool,
-    identifier: Option<Identifier>,
-    resume: bool,
-    no_session: bool,
-    debug: bool,
-    max_tool_repetitions: Option<u32>,
-    max_turns: Option<u32>,
-    extensions: Vec<String>,
-    remote_extensions: Vec<String>,
-    streamable_http_extensions: Vec<String>,
-    builtins: Vec<String>,
-    params: Vec<(String, String)>,
-    explain: bool,
-    render_recipe: bool,
-    scheduled_job_id: Option<String>,
+fn parse_run_input(
+    input_opts: &InputOptions,
     quiet: bool,
-    additional_sub_recipes: Vec<String>,
-    output_format: String,
-    provider: Option<String>,
-    model: Option<String>,
-}
-
-struct ParseRunInputArgs {
-    instructions: Option<String>,
-    input_text: Option<String>,
-    recipe: Option<String>,
-    system: Option<String>,
-    params: Vec<(String, String)>,
-    additional_sub_recipes: Vec<String>,
-    explain: bool,
-    render_recipe: bool,
-    quiet: bool,
-}
-
-fn parse_run_input(args: ParseRunInputArgs) -> Result<Option<(InputConfig, Option<RecipeInfo>)>> {
-    match (args.instructions, args.input_text, args.recipe) {
+) -> Result<Option<(InputConfig, Option<RecipeInfo>)>> {
+    match (
+        &input_opts.instructions,
+        &input_opts.input_text,
+        &input_opts.recipe,
+    ) {
         (Some(file), _, _) if file == "-" => {
-            let mut input = String::new();
+            let mut contents = String::new();
             std::io::stdin()
-                .read_to_string(&mut input)
+                .read_to_string(&mut contents)
                 .expect("Failed to read from stdin");
             Ok(Some((
                 InputConfig {
-                    contents: Some(input),
+                    contents: Some(contents),
                     extensions_override: None,
-                    additional_system_prompt: args.system,
+                    additional_system_prompt: input_opts.system.clone(),
                 },
                 None,
             )))
         }
         (Some(file), _, _) => {
-            let contents = std::fs::read_to_string(&file).unwrap_or_else(|err| {
+            let contents = std::fs::read_to_string(file).unwrap_or_else(|err| {
                 eprintln!(
                     "Instruction file not found — did you mean to use goose run --text?\n{}",
                     err
@@ -1224,19 +1168,19 @@ fn parse_run_input(args: ParseRunInputArgs) -> Result<Option<(InputConfig, Optio
         }
         (_, Some(text), _) => Ok(Some((
             InputConfig {
-                contents: Some(text),
+                contents: Some(text.clone()),
                 extensions_override: None,
-                additional_system_prompt: args.system,
+                additional_system_prompt: input_opts.system.clone(),
             },
             None,
         ))),
         (_, _, Some(recipe_name)) => {
-            let recipe_display_name = std::path::Path::new(&recipe_name)
+            let recipe_display_name = std::path::Path::new(recipe_name)
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or(&recipe_name);
+                .unwrap_or(recipe_name);
 
-            let recipe_version = crate::recipes::search_recipe::load_recipe_file(&recipe_name)
+            let recipe_version = crate::recipes::search_recipe::load_recipe_file(recipe_name)
                 .ok()
                 .and_then(|rf| {
                     goose::recipe::template_recipe::parse_recipe_content(
@@ -1248,12 +1192,12 @@ fn parse_run_input(args: ParseRunInputArgs) -> Result<Option<(InputConfig, Optio
                 })
                 .unwrap_or_else(|| "unknown".to_string());
 
-            if args.explain {
-                explain_recipe(&recipe_name, args.params)?;
+            if input_opts.explain {
+                explain_recipe(recipe_name, input_opts.params.clone())?;
                 return Ok(None);
             }
-            if args.render_recipe {
-                if let Err(err) = render_recipe_as_yaml(&recipe_name, args.params) {
+            if input_opts.render_recipe {
+                if let Err(err) = render_recipe_as_yaml(recipe_name, input_opts.params.clone()) {
                     eprintln!("{}: {}", console::style("Error").red().bold(), err);
                     std::process::exit(1);
                 }
@@ -1270,10 +1214,10 @@ fn parse_run_input(args: ParseRunInputArgs) -> Result<Option<(InputConfig, Optio
             );
 
             let (input_config, recipe_info) = extract_recipe_info_from_cli(
-                recipe_name,
-                args.params,
-                args.additional_sub_recipes,
-                args.quiet,
+                recipe_name.clone(),
+                input_opts.params.clone(),
+                input_opts.additional_sub_recipes.clone(),
+                quiet,
             )?;
             Ok(Some((input_config, Some(recipe_info))))
         }
@@ -1284,18 +1228,16 @@ fn parse_run_input(args: ParseRunInputArgs) -> Result<Option<(InputConfig, Optio
     }
 }
 
-async fn handle_run_command(args: RunCommandArgs) -> Result<()> {
-    let parsed = parse_run_input(ParseRunInputArgs {
-        instructions: args.instructions,
-        input_text: args.input_text,
-        recipe: args.recipe,
-        system: args.system,
-        params: args.params,
-        additional_sub_recipes: args.additional_sub_recipes,
-        explain: args.explain,
-        render_recipe: args.render_recipe,
-        quiet: args.quiet,
-    })?;
+async fn handle_run_command(
+    input_opts: InputOptions,
+    identifier: Option<Identifier>,
+    run_behavior: RunBehavior,
+    session_opts: SessionOptions,
+    extension_opts: ExtensionOptions,
+    output_opts: OutputOptions,
+    model_opts: ModelOptions,
+) -> Result<()> {
+    let parsed = parse_run_input(&input_opts, output_opts.quiet)?;
 
     let Some((input_config, recipe_info)) = parsed else {
         return Ok(());
@@ -1304,48 +1246,48 @@ async fn handle_run_command(args: RunCommandArgs) -> Result<()> {
     if let Some(Identifier {
         session_id: Some(_),
         ..
-    }) = &args.identifier
+    }) = &identifier
     {
-        if !args.resume {
+        if !run_behavior.resume {
             eprintln!("Error: --session-id can only be used with --resume flag");
             std::process::exit(1);
         }
     }
 
     let session_id =
-        get_or_create_session_id(args.identifier, args.resume, args.no_session).await?;
+        get_or_create_session_id(identifier, run_behavior.resume, run_behavior.no_session).await?;
 
     let mut session = build_session(SessionBuilderConfig {
         session_id,
-        resume: args.resume,
-        no_session: args.no_session,
-        extensions: args.extensions,
-        remote_extensions: args.remote_extensions,
-        streamable_http_extensions: args.streamable_http_extensions,
-        builtins: args.builtins,
+        resume: run_behavior.resume,
+        no_session: run_behavior.no_session,
+        extensions: extension_opts.extensions,
+        remote_extensions: extension_opts.remote_extensions,
+        streamable_http_extensions: extension_opts.streamable_http_extensions,
+        builtins: extension_opts.builtins,
         extensions_override: input_config.extensions_override,
         additional_system_prompt: input_config.additional_system_prompt,
         settings: recipe_info
             .as_ref()
             .and_then(|r| r.session_settings.clone()),
-        provider: args.provider,
-        model: args.model,
-        debug: args.debug,
-        max_tool_repetitions: args.max_tool_repetitions,
-        max_turns: args.max_turns,
-        scheduled_job_id: args.scheduled_job_id,
-        interactive: args.interactive,
-        quiet: args.quiet,
+        provider: model_opts.provider,
+        model: model_opts.model,
+        debug: session_opts.debug,
+        max_tool_repetitions: session_opts.max_tool_repetitions,
+        max_turns: session_opts.max_turns,
+        scheduled_job_id: run_behavior.scheduled_job_id,
+        interactive: run_behavior.interactive,
+        quiet: output_opts.quiet,
         sub_recipes: recipe_info.as_ref().and_then(|r| r.sub_recipes.clone()),
         final_output_response: recipe_info
             .as_ref()
             .and_then(|r| r.final_output_response.clone()),
         retry_config: recipe_info.as_ref().and_then(|r| r.retry_config.clone()),
-        output_format: args.output_format,
+        output_format: output_opts.output_format,
     })
     .await;
 
-    if args.interactive {
+    if run_behavior.interactive {
         session.interactive(input_config.contents).await
     } else if let Some(contents) = input_config.contents {
         let session_start = std::time::Instant::now();
@@ -1503,27 +1445,11 @@ pub async fn cli() -> anyhow::Result<()> {
             identifier,
             resume,
             history,
-            debug,
-            max_tool_repetitions,
-            max_turns,
-            extensions,
-            remote_extensions,
-            streamable_http_extensions,
-            builtins,
+            session_opts,
+            extension_opts,
         }) => {
-            handle_interactive_session(InteractiveSessionArgs {
-                identifier,
-                resume,
-                history,
-                debug,
-                max_tool_repetitions,
-                max_turns,
-                extensions,
-                remote_extensions,
-                streamable_http_extensions,
-                builtins,
-            })
-            .await
+            handle_interactive_session(identifier, resume, history, session_opts, extension_opts)
+                .await
         }
         Some(Command::Project {}) => {
             handle_project_default()?;
@@ -1534,57 +1460,23 @@ pub async fn cli() -> anyhow::Result<()> {
             Ok(())
         }
         Some(Command::Run {
-            instructions,
-            input_text,
-            recipe,
-            system,
-            interactive,
+            input_opts,
             identifier,
-            resume,
-            no_session,
-            debug,
-            max_tool_repetitions,
-            max_turns,
-            extensions,
-            remote_extensions,
-            streamable_http_extensions,
-            builtins,
-            params,
-            explain,
-            render_recipe,
-            scheduled_job_id,
-            quiet,
-            additional_sub_recipes,
-            output_format,
-            provider,
-            model,
+            run_behavior,
+            session_opts,
+            extension_opts,
+            output_opts,
+            model_opts,
         }) => {
-            handle_run_command(RunCommandArgs {
-                instructions,
-                input_text,
-                recipe,
-                system,
-                interactive,
+            handle_run_command(
+                input_opts,
                 identifier,
-                resume,
-                no_session,
-                debug,
-                max_tool_repetitions,
-                max_turns,
-                extensions,
-                remote_extensions,
-                streamable_http_extensions,
-                builtins,
-                params,
-                explain,
-                render_recipe,
-                scheduled_job_id,
-                quiet,
-                additional_sub_recipes,
-                output_format,
-                provider,
-                model,
-            })
+                run_behavior,
+                session_opts,
+                extension_opts,
+                output_opts,
+                model_opts,
+            )
             .await
         }
         Some(Command::Schedule { command }) => handle_schedule_command(command).await,
