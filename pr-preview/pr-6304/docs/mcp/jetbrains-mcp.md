@@ -154,7 +154,7 @@ When using goose to refactor code, it's recommended to commit your code to versi
 using the JetBrains IDE tools, upgrade this project to use the latest Java LTS version and refactor the codebase to use newer Java features where beneficial.
 ```
 
-After 2 minutes, goose was done with the upgrade!
+After 2 minutes, goose was done with the upgrade! 🎉
 
 ### goose Output
 
