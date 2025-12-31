@@ -56,7 +56,7 @@ Note that you'll need [uv](https://docs.astral.sh/uv/#installation) installed on
       apiKeyLinkText="Service Access Token"
     />
 
-    <!-- For external HTTP MCP servers (Streamable HTTP) -->
+    <!-- For HTTP MCP servers -->
     <GooseDesktopInstaller
       extensionId="{extension_id}"
       extensionName="{Extension Name}"
@@ -93,7 +93,7 @@ Note that you'll need [uv](https://docs.astral.sh/uv/#installation) installed on
       }
     />
 
-    <!-- For external HTTP MCP servers (Streamable HTTP) -->
+    <!-- For HTTP MCP servers -->
     <CLIExtensionInstructions
       name="{Extension Name}"
       description="{Extension description}"

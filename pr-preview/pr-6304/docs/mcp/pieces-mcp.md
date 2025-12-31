@@ -2,13 +2,11 @@
 
 This tutorial covers how to add the [Pieces for Developers MCP Server](https://docs.pieces.app/products/mcp/get-started?utm_source=goose&utm_medium=collab&utm_campaign=mcp) as a goose extension to enable interaction with your Pieces Long-Term Memory.
 
-## Prerequisites
+## Configuration
 
-1. Download and install [PiecesOS](https://pieces.app/)
+1. Download [PiecesOS](https://pieces.app/)
 
 2. Enable [Long-Term Memory Context](https://docs.pieces.app/products/quick-guides/ltm-context) in PiecesOS
-
-## Configuration
 
 <Tabs groupId="interface">
   <TabItem value="ui" label="goose Desktop" default>
