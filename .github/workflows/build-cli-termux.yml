@@ -1,0 +1,101 @@
+name: "Termux build"
+
+on:
+  push:
+    branches:
+      - "build-termux-*"
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  build-cli-termux:
+    name: Build Termux CLI
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: termux/termux-docker:${{ matrix.architecture }}
+      volumes:
+        - /tmp/node20:/__e/node20
+    env:
+      TERMUX_MAIN_PACKAGE_FORMAT: debian
+      ANDROID_ROOT: /system
+      ANDROID_DATA: /data
+      PREFIX: /data/data/com.termux/files/usr
+      HOME: /data/data/com.termux/files/home
+      PATH: /data/data/com.termux/files/usr/bin
+      TMPDIR: /data/data/com.termux/files/usr/tmp
+      LANG: en_US.UTF-8
+      TZ: UTC
+      # Prevents other interactive prompts during pkg installs
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: set pkg mirror
+        run: ln -sf ${PREFIX}/etc/termux/mirrors/default ${PREFIX}/etc/termux/chosen_mirrors
+
+      - name: upgrade packages (non-interactive)
+        run: |
+          # The -o flags force dpkg to keep existing config files (like openssl.cnf) and skip prompts
+          /entrypoint.sh bash -c "pkg upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\""
+
+      - name: fix executable bits
+        run: chmod -R o+x ${PREFIX}/bin
+
+      - name: install build toolchain and nodejs
+        run: |
+          # Install all tools needed for the goose build
+          /entrypoint.sh pkg install -y nodejs-lts rust cmake protobuf clang build-essential tar
+          # Link node for GitHub Actions compatibility
+          ln -sf ${PREFIX}/bin /__e/node20/bin
+
+      - uses: actions/checkout@v4.2.2
+
+      - name: fix repository permissions
+        run: chown -R 1000:1000 .
+
+      - name: update xcap version
+        run: |
+          # Update xcap version to 0.7.0 specifically in the mcp crate
+          sed -i 's/^xcap = ".*"/xcap = "0.7.0"/' crates/goose-mcp/Cargo.toml
+
+      - name: build goose-cli
+        run: |
+          # Build the release binary for the CLI package
+          /entrypoint.sh CFLAGS="-std=gnu99 -Wno-error=implicit-function-declaration"  cargo build --release -p goose-cli
+          
+          # Create the distribution package
+          /entrypoint.sh mkdir -p "target/release/goose-package"
+          /entrypoint.sh cp "target/release/goose" "target/release/goose-package/"
+          /entrypoint.sh tar -cjf "goose-termux-${{ matrix.architecture }}.tar.bz2" -C target/release/goose-package .
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: goose-termux-${{ matrix.architecture }}
+          path: goose-termux-${{ matrix.architecture }}.tar.bz2
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build-cli-termux]
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: termux
+          name: Termux Release
+          files: goose-*.tar.bz2
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
